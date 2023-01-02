@@ -1,5 +1,6 @@
 const http = require('http');
 const crypto = require('crypto');
+const cluster = require('cluster');
 
 const { USER_UUID_MATCHER, GET_USER_MATCHER, API_ROUTE_MATCHER, USERS_ROUTE_MATCHER } = require('./constants');
 const { validateUser } = require('./utils/validators');
@@ -7,7 +8,6 @@ const { validateUser } = require('./utils/validators');
 const setNotFound = (res) => res.statusCode = 404;
 const setJsonResponse = (res) => res.setHeader('Content-Type', 'application/json');
 const setStatus = (res, status) =>  res.statusCode = status;
-
 
 const users = [
     {
@@ -38,7 +38,10 @@ const parseBody = async (req) => {
 }
 
 const app = (users) => {
+    process.stdout.write(`Server created - ${process.pid}\n`)
+
     const server = http.createServer(async (req, res) => {
+        process.stdout.write(`Request handled - ${process.pid}`)
         let url = req.url;
         const method = req.method;
     
@@ -55,27 +58,46 @@ const app = (users) => {
         }
     
         if ((userData = url.match(GET_USER_MATCHER)) && method === 'GET') {
-            const userId = url.match(USER_UUID_MATCHER);
-            
-            if (!userId) {
+            const user_matchers = url.match(USER_UUID_MATCHER);
+            const uid = user_matchers[2];
+
+            if (!user_matchers) {
                 setStatus(res, 400)
                 res.end(JSON.stringify({ error: 'Incorrect User ID'}))
                 return;
             }
-    
-            const data = users.find(u => u.id === userId[2]);
             
-            if (!data) setNotFound(res);
-            
-            res.end(JSON.stringify({ data: data || null }))
-        
+            if (cluster.isWorker) {
+                process.send({action: 'get_single_user', userId: uid})
+                process.on('message', (data) => {
+                    if (data.label === 'get_single_user' && data.pid === process.pid) {
+                        if (!data) setNotFound(res);
+                        res.end(JSON.stringify({ data: data.user || null }))
+                    }
+                })
+            } else {
+                const data = users.find(u => u.id === uid);
+                if (!data) setNotFound(res);   
+                res.end(JSON.stringify({ data: data || null }))
+            }
+
         } else if (url.match(USERS_ROUTE_MATCHER) && method == 'GET') {
-        
-            res.end(JSON.stringify({ data: users }))
-        
+            if (cluster.isWorker) {
+                process.send({action: 'get_users'});
+                process.on('message', (data) => {
+                    if (data.label === 'get_users' && data.pid === process.pid) {
+                        console.log(data.pid, 'get_users');
+                        res.end(JSON.stringify({data: data.users || []}));
+                        process.exit()
+                    }
+                })
+            } else {
+                res.end(JSON.stringify({ data: users }))
+            }
         } else if ((userData = url.match(GET_USER_MATCHER)) && method === 'PUT') {
             const userId = url.match(USER_UUID_MATCHER);
-            
+            const uuid = userId[2];
+
             if (!userId) {
                 setStatus(res, 400)
                 res.end(JSON.stringify({ error: 'Incorrect User ID'}))
@@ -85,31 +107,47 @@ const app = (users) => {
             const body = await parseBody(req);
     
             const updateData = body ? body.data : {};
-            console.log(userId);
-            const user = users.find(u => u.id === userId[2]);
-            
-            if (!user) {
-                setNotFound(res);
-                res.end(JSON.stringify({ error: 'User not found'}));
-                return;
-            }
-    
-            else {
-                users = users.map(u => {
-                    if (u.id === userId[2]) {
-                        return { ...u, ...updateData}
+           
+            // If process is worker
+            if (cluster.isWorker) {
+                process.send({action: 'update_user', userId: uuid, updateData});
+                process.on('message', (data) => {
+                    if (data.label === 'update_user' && data.pid == process.pid) {
+                        console.log(data, process.pid);
+                        if (data.status) {
+                            setNotFound(res)
+                            res.end(JSON.stringify({ error: 'User not found'}));
+                        } else {
+                            setStatus(res, 200);
+                            res.end(JSON.stringify({ success: true }));
+                        };
                     }
-                    u = { ...u, ...updateData}
-                    console.log(u);
-                });
+                })
+            } else {
+                const user = users.find(u => u.id === userId[2]);
+                
+                if (!user) {
+                    setNotFound(res);
+                    res.end(JSON.stringify({ error: 'User not found'}));
+                    return;
+                }
+        
+                else {
+                    users = users.map(u => {
+                        if (u.id === userId[2]) {
+                            return { ...u, ...updateData}
+                        }
+                        u = { ...u, ...updateData}
+                        console.log(u);
+                    });
+                }
+        
+                setStatus(res, 200);
+                
+                res.end(JSON.stringify({
+                    users
+                }))
             }
-    
-            setStatus(res, 200);
-            
-            res.end(JSON.stringify({
-                users
-            }))
-    
         } else if (url.match(USERS_ROUTE_MATCHER) && method == 'POST') {
             const requestBody = await parseBody(req);
     
@@ -126,14 +164,25 @@ const app = (users) => {
                     id: userId,
                     ...requestBody.data
                 }
-                
+
                 setStatus(res, 201);
 
-                users.push(newUser);
-                
-                res.end(JSON.stringify({
-                    users
-                }))
+                if (cluster.isWorker) {
+                    process.send({action: 'insert_user', user: newUser});
+                    process.on('message', (data) => {
+                        if (data.label === 'insert_user' && data.pid === process.pid) {
+                            const users = data.users;
+                            res.end(JSON.stringify({
+                                users: users
+                            }))
+                        }
+                    })
+                } else {
+                    users.push(newUser);
+                    res.end(JSON.stringify({
+                        users
+                    }))
+                }
             } else {
                 setStatus(res, 400);
                 res.end(JSON.stringify({
