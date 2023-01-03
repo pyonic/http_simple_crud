@@ -6,6 +6,12 @@ const { USER_UUID_MATCHER, GET_USER_MATCHER, USERS_ROUTE_MATCHER, HTTP_METHODS }
 const { validateUser } = require('./utils/validators');
 const { serializer, parseBody } = require('./utils');
 
+process.on('message', (data) => {
+    const messageData = JSON.parse(data.toString());
+    process.stdout.write(`Updating users on worker ${process.pid}\n`)
+    UserDB.setUsers(messageData.users);
+})
+
 const setJsonResponse = (res) => res.setHeader('Content-Type', 'application/json');
 
 const requestHandler = async (req, res) => {
@@ -120,6 +126,7 @@ const app = (users = []) => {
     if (users.length) UserDB.setUsers(users);
 
     const server = http.createServer(async (req, res) => {
+        console.log(`\nServer started ${ process.pid }`);
         try {
             const data = await requestHandler(req, res);
             console.log(data);

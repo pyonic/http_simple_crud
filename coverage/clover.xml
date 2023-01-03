@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1672673471863" clover="3.2.0">
-  <project timestamp="1672673471863" name="All files">
+<coverage generated="1672674836838" clover="3.2.0">
+  <project timestamp="1672674836838" name="All files">
     <metrics statements="123" coveredstatements="91" conditionals="58" coveredconditionals="37" methods="22" coveredmethods="19" elements="203" coveredelements="147" complexity="0" loc="123" ncloc="123" packages="4" files="5" classes="5"/>
     <package name="crud-api">
       <metrics statements="83" coveredstatements="57" conditionals="47" coveredconditionals="31" methods="4" coveredmethods="4"/>

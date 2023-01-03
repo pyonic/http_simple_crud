@@ -6,7 +6,9 @@
   "scripts": {
     "test": "jest --testPathPattern=tests",
     "start:dev": "NODE_ENV=development nodemon index.js",
-    "start:prod": "NODE_ENV=production node index.js"
+    "start:prod": "NODE_ENV=production node index.js",
+    "start:multi": "NODE_ENV=development node multi.js",
+    "start:multi:prod": "NODE_ENV=production node multi.js"
   },
   "keywords": [],
   "author": "",
