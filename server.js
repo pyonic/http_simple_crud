@@ -1,175 +1,151 @@
 const http = require('http');
 const crypto = require('crypto');
+const UserDB = require('./controllers/User');
 
-const { USER_UUID_MATCHER, GET_USER_MATCHER, API_ROUTE_MATCHER, USERS_ROUTE_MATCHER } = require('./constants');
+const { USER_UUID_MATCHER, GET_USER_MATCHER, USERS_ROUTE_MATCHER, HTTP_METHODS } = require('./constants');
 const { validateUser } = require('./utils/validators');
+const { serializer, parseBody } = require('./utils');
 
-const setNotFound = (res) => res.statusCode = 404;
+process.on('message', (data) => {
+    const messageData = JSON.parse(data.toString());
+    process.stdout.write(`Updating users on worker ${process.pid}\n`)
+    UserDB.setUsers(messageData.users);
+})
+
 const setJsonResponse = (res) => res.setHeader('Content-Type', 'application/json');
-const setStatus = (res, status) =>  res.statusCode = status;
 
+const requestHandler = async (req, res) => {
+    const method = req.method;
+    let responseStatus;
+    let url = req.url;
+    let response;
 
-const users = [
-    {
-        id: '123e4567-e89b-12d3-a456-426655440000',
-        username: 'Andy',
-        age: 20,
-        hobbies: ['chess', 'books']
-    }
-];
+    process.stdout.write(`[INFO] REQUEST ${method} --> '${url}'\n`);
 
-const parseBody = async (req) => {
-    return new Promise((resolve, reject) => {
-        const body = [];
-        req.on('data', (chunk) => body.push(chunk));
-        req.on('end', () => {
-            const reqBody = Buffer.concat(body).toString();
-            let requestData = {}
+    setJsonResponse(res);
+    
+    url = url.replace('/api', '');
 
-            try {
-                requestData = JSON.parse(reqBody)
-            } catch (error) {
-                resolve(null);
+    if ((userData = url.match(GET_USER_MATCHER)) && method === HTTP_METHODS.get) {
+        const user = url.match(USER_UUID_MATCHER);
+        
+        if (!user) {
+            responseStatus = 400;
+            response = JSON.stringify({ error: 'Incorrect User ID'});
+        } else {
+            const uuid = user[2];
+            const data = UserDB.getOne(uuid);
+            if (!data) responseStatus = 404; 
+            else responseStatus = 200   
+            response = JSON.stringify({ data: data || [] });
+        }
+
+    } else if (url.match(USERS_ROUTE_MATCHER) && method == HTTP_METHODS.get) {
+        
+        responseStatus = 200;
+        response = serializer({data: UserDB.getAll()});
+    
+    } else if ((userData = url.match(GET_USER_MATCHER)) && method === HTTP_METHODS.put) {
+        const userId = url.match(USER_UUID_MATCHER);
+        
+        if (!userId) {
+            responseStatus = 400;
+            response = JSON.stringify({ error: 'Incorrect User ID'});
+        } else {
+            const uuid = userId[2];
+            const user = UserDB.getOne(uuid);
+
+            if (!user) {
+                responseStatus = 404;
+                response = JSON.stringify({ error: 'User not found'});
+            } else {
+                const body = await parseBody(req);
+
+                const updateData = body ? body.data : {};
+    
+                const user = UserDB.updateOne(uuid, updateData)
+                
+                responseStatus = 200;
+                response = serializer({data: user});
+            }
+        }
+
+    } else if (url.match(USERS_ROUTE_MATCHER) && method === HTTP_METHODS.post) {
+        const requestBody = await parseBody(req);
+
+        if (!requestBody.data) {
+            responseStatus = 404;
+            response = JSON.stringify({ error: 'Data required'});
+        }
+        
+        if (validateUser(requestBody.data)) {
+            const userId = crypto.randomUUID();
+
+            const newUser = {
+                id: userId,
+                ...requestBody.data
             }
             
-            resolve(requestData);
-        })
-    });
+            UserDB.insertUser(newUser);
+
+            responseStatus = 201;
+
+            response = UserDB.getSerializedUsers();
+        } else {
+            responseStatus = 400;
+            response = JSON.stringify({
+                error: 'Please fill all required data {username: str, age: number, hobbies: array->string }'
+            });
+        }
+    } else if ((userData = url.match(GET_USER_MATCHER)) && method === HTTP_METHODS.delete) {
+        const userId = url.match(USER_UUID_MATCHER);
+        
+        if (!userId) {
+            responseStatus = 400;
+            response = JSON.stringify({ error: 'Incorrect User ID'});
+        } else {
+            const uuid = userId[2];
+
+            if (!UserDB.getOne(uuid)) {
+                responseStatus = 404;
+                response = JSON.stringify({ error: 'User not found'});
+            } else {
+                UserDB.deleteOne(uuid);
+                responseStatus = 204;
+            }
+        }
+    } else {
+        responseStatus = 404;
+        response = JSON.stringify({error: 'Requested url not found'});
+    }
+
+    return { response, status: responseStatus }
 }
 
-const app = (users) => {
-    const server = http.createServer(async (req, res) => {
-        let url = req.url;
-        const method = req.method;
-    
-        process.stdout.write(`[INFO] REQUEST ${method} --> '${url}'\n`);
-    
-        setJsonResponse(res);
-        
-        if (url.match(API_ROUTE_MATCHER) === null) {
-            setNotFound(res);
-            res.end(JSON.stringify({ error: 'Not found' }));
-            return;
-        } else {
-            url = url.replace('/api', '');
-        }
-    
-        if ((userData = url.match(GET_USER_MATCHER)) && method === 'GET') {
-            const userId = url.match(USER_UUID_MATCHER);
-            
-            if (!userId) {
-                setStatus(res, 400)
-                res.end(JSON.stringify({ error: 'Incorrect User ID'}))
-                return;
-            }
-    
-            const data = users.find(u => u.id === userId[2]);
-            
-            if (!data) setNotFound(res);
-            
-            res.end(JSON.stringify({ data: data || null }))
-        
-        } else if (url.match(USERS_ROUTE_MATCHER) && method == 'GET') {
-        
-            res.end(JSON.stringify({ data: users }))
-        
-        } else if ((userData = url.match(GET_USER_MATCHER)) && method === 'PUT') {
-            const userId = url.match(USER_UUID_MATCHER);
-            
-            if (!userId) {
-                setStatus(res, 400)
-                res.end(JSON.stringify({ error: 'Incorrect User ID'}))
-                return;
-            }
-    
-            const body = await parseBody(req);
-    
-            const updateData = body ? body.data : {};
-            console.log(userId);
-            const user = users.find(u => u.id === userId[2]);
-            
-            if (!user) {
-                setNotFound(res);
-                res.end(JSON.stringify({ error: 'User not found'}));
-                return;
-            }
-    
-            else {
-                users = users.map(u => {
-                    if (u.id === userId[2]) {
-                        return { ...u, ...updateData}
-                    }
-                    u = { ...u, ...updateData}
-                    console.log(u);
-                });
-            }
-    
-            setStatus(res, 200);
-            
-            res.end(JSON.stringify({
-                users
-            }))
-    
-        } else if (url.match(USERS_ROUTE_MATCHER) && method == 'POST') {
-            const requestBody = await parseBody(req);
-    
-            if (!requestBody.data) {
-                setStatus(res, 400);
-                res.end(JSON.stringify({ error: 'Data required'}));
-                return;
-            }
-            
-            if (validateUser(requestBody.data)) {
-                const userId = crypto.randomUUID();
-    
-                const newUser = {
-                    id: userId,
-                    ...requestBody.data
-                }
-                
-                setStatus(res, 201);
+const app = (users = []) => {
+    if (users.length) UserDB.setUsers(users);
 
-                users.push(newUser);
-                
-                res.end(JSON.stringify({
-                    users
-                }))
+    const server = http.createServer(async (req, res) => {
+        console.log(`\nServer started ${ process.pid }`);
+        try {
+            const data = await requestHandler(req, res);
+            console.log(data);
+            if (!data.status) {
+                res.statusCode = 404;
+                res.end(JSON.stringify({ error: 'Not found' }));
             } else {
-                setStatus(res, 400);
-                res.end(JSON.stringify({
-                    error: 'Please fill all required data {username: str, age: number, hobbies: array->string }'
-                }))
+                res.statusCode = data.status;
+                res.end(data.response);
             }
-        } else if ((userData = url.match(GET_USER_MATCHER)) && method === 'DELETE') {
-            const userId = url.match(USER_UUID_MATCHER);
-            
-            if (!userId) {
-                setStatus(res, 400)
-                res.end(JSON.stringify({ error: 'Incorrect User ID'}))
-                return;
-            }
-            console.log(users.find(u => u.id === userId[2]));
-            console.log(userId[2]);
-            if (!users.find(u => u.id === userId[2])) {
-                setNotFound(res);
-                res.end(JSON.stringify({ error: 'User not found'}))
-                return;
-            }
-    
-    
-            users = users.filter(u => u.id !== userId[2]).map(u => u);
-            console.log(users);
-            setStatus(res, 204);
-            res.end();
-        } else {
-            setNotFound(res);
-            res.end(JSON.stringify({error: 'Requested url not found'}))
+        } catch (e) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: e.message || 'Unexpected error' }));
         }
     });
-
+    
     return server;
 }
 
 module.exports = {
-    app: (dataset = users) => app(dataset)
+    app
 }
