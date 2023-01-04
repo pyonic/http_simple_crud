@@ -10,8 +10,6 @@ require('dotenv').config()
 const PORT = parseInt(process.env.PORT) || 5000;
 
 if (cluster.isMaster) {
-    // Fork the hand made InMemory Redis server
-    child_process.fork('./redis');
     let current_server = 0;
     const workers = [];
     const servers = [];
@@ -28,19 +26,18 @@ if (cluster.isMaster) {
         const worker = cluster.fork();
         workers.push(worker);
     }
-    
-    // InMemory(redis) sends update info to master and master send this update to all workers
-    const { getSocket } = require('./controllers/db');
-    getSocket().on('data', (data) => {
-        process.stdout.write(`Message came to process ${process.pid} - ${data.toString() } \n`);
-        const socketData = JSON.parse(data.toString());
-        console.log(socketData);
-        if ( socketData.set ) {
-            const users = socketData.data;
-            workers.forEach(w => w.send(JSON.stringify({ users })));
-        }
-    });
 
+    // Worker sends update data -> master sends update data to all workers
+    workers.forEach((w) => {
+        w.on('message', (data) => {
+            const workerData = JSON.parse(data);
+            if (workerData.action === 'set') {
+                process.stdout.write(`\nUpdate message came from worker ${w.pid}\n`)
+                workers.forEach(w => w.send(JSON.stringify({ users: workerData.value })));
+            }
+        })
+    })
+    
     // Master server on {PORT}
     const server = http.createServer(async (req, res) => {
         res.setHeader('Content-Type', 'application/json');
