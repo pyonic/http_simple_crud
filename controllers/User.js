@@ -28,7 +28,7 @@ class UserDB {
     updateOne (uid, data) {
         this._users_database = this._users_database.map(u => {
             if (u.id === uid) {
-                u = { ...u, ...data }
+                u = { ...data, ...u }
             }
             return u
         })
@@ -44,7 +44,7 @@ class UserDB {
     }
 
     insertUser (data) {
-        if (!data.id) data.id = crypto.randomUUID();
+        data.id = crypto.randomUUID();
         this._users_database.push(data);
         cluster.isWorker && setData('users', this._users_database);
     }

@@ -35,7 +35,7 @@ const server = net.createServer(socket => {
 
 
 server.listen(2020, () => {
-    process.stdout.write('\n[IN_MEMORY_SERVER]: Server bounded on 127.0.0.1:2020')
+    process.stdout.write('\n[IN_MEMORY_SERVER]: Server bounded on 127.0.0.1:2020 \n')
 });
 
 server.on('error', (e) => {

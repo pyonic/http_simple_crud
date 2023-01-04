@@ -126,6 +126,7 @@ const app = (users = []) => {
     if (users.length) UserDB.setUsers(users);
 
     const server = http.createServer(async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
         console.log(`\nServer started ${ process.pid }`);
         try {
             const data = await requestHandler(req, res);
