@@ -4,11 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "webpack --config ./webpack.config.js",
     "test": "jest --testPathPattern=tests",
     "start:dev": "NODE_ENV=development nodemon index.js",
-    "start:prod": "NODE_ENV=production node index.js",
-    "start:multi": "NODE_ENV=development node multi.js",
-    "start:multi:prod": "NODE_ENV=production node multi.js"
+    "start:prod": "NODE_ENV=production node ./build/bundle-index.js",
+    "start:multi": "NODE_ENV=development node multi.js"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +19,9 @@
     "supertest": "^6.3.3"
   },
   "dependencies": {
-    "dotenv": "^16.0.3"
+    "dotenv": "^16.0.3",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1",
+    "webpack-node-externals": "^3.0.0"
   }
 }
