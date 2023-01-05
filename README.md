@@ -3,7 +3,7 @@ Task: https://github.com/AlreadyBored/nodejs-assignments/blob/main/assignments/c
 ```
 Deadlines: start: 2023-01-02	end: 2023-01-17
 
-Approximate score: **192**
+Approximate score: **202**
 ```
 ```
 +10 The repository with the application contains a Readme.md file containing detailed instructions for installing, running and using the application
