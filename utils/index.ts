@@ -1,8 +1,10 @@
-const serializer = (obj) => JSON.stringify.call(this, obj)
+import { ClientRequest } from "http";
 
-const parseBody = async (req) => {
+const serializer = (obj: Object) => JSON.stringify(obj);
+
+const parseBody = async (req: ClientRequest) => {
     return new Promise((resolve, reject) => {
-        const body = [];
+        const body: Array<Buffer> = [];
         req.on('data', (chunk) => body.push(chunk));
         req.on('end', () => {
             const reqBody = Buffer.concat(body).toString();
@@ -19,7 +21,4 @@ const parseBody = async (req) => {
     });
 }
 
-module.exports = {
-    serializer,
-    parseBody
-}
+export { serializer, parseBody }

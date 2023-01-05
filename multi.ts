@@ -1,19 +1,21 @@
-const child_process = require('child_process');
-const server = require('./server');
-const cluster = require('cluster');
-const http = require('http');
-const os = require('os');
-const { parseBody } = require('./utils');
+import * as dotenv from 'dotenv';
+import cluster from 'cluster';
+import * as http from 'http';
+import os from 'os';
 
-require('dotenv').config()
+import { HTTP_METHODS } from './constants';
+import { app as ServerApp } from './server';
+import { parseBody } from './utils';
 
-const PORT = parseInt(process.env.PORT) || 5000;
+dotenv.config({ path: __dirname + '/.env'})
 
-if (cluster.isMaster) {
-    let current_server = 0;
-    const workers = [];
-    const servers = [];
-    const ports = [];
+const PORT: number = parseInt(process.env.PORT!) || 5000;
+
+if (cluster.isPrimary) {
+    let current_server: number = 0;
+    const workers: Array<any> = [];
+    const servers: string[] = [];
+    const ports: number[] = [];
     
     const CPUS = os.cpus().length;
     for (let i = 1; i < CPUS + 1; i++) {
@@ -29,23 +31,24 @@ if (cluster.isMaster) {
 
     // Worker sends update data -> master sends update data to all workers
     workers.forEach((w) => {
-        w.on('message', (data) => {
+        w.on('message', (data: string) => {
             const workerData = JSON.parse(data);
             if (workerData.action === 'set') {
-                process.stdout.write(`\nUpdate message came from worker ${w.pid}\n`)
                 workers.forEach(w => w.send(JSON.stringify({ users: workerData.value })));
             }
         })
     })
     
     // Master server on {PORT}
-    const server = http.createServer(async (req, res) => {
+    const masterServer = http.createServer(async (req: any, res: any) => {
         res.setHeader('Content-Type', 'application/json');
-        const body = req.method === 'POST' || req.method === 'PUT' ? await parseBody(req) : {};
+        
+        const body = req.method === HTTP_METHODS.post || req.method === HTTP_METHODS.put ? await parseBody(req) : {};
         const requestData = JSON.stringify(body);
-        const loadServer = servers[current_server];
+
         current_server === (servers.length - 1) ? current_server = 0 : current_server++;
-        const destination = `${loadServer}${req.url}`
+        
+        const destination = `${servers[current_server]}${req.url}`
 
         process.stdout.write(`\nSending request to [${req.method}] ${destination}\n`)
 
@@ -60,31 +63,32 @@ if (cluster.isMaster) {
             },
         };
 
-        const request = http.request(options, async (response) => {
+        const request = http.request(options, async (response: any) => {
             response.setEncoding('utf8');
             res.statusCode = response.statusCode;
             if (response.statusCode == 204) {
                 res.end()
             }
-            response.on('data', (chunk) => {
+            response.on('data', (chunk: any) => {
               res.end(chunk);
             });
         });
         
-        if (req.method !== 'GET') {
+        if (req.method !== HTTP_METHODS.get) {
             request.write(requestData);
         }
         
         request.end();
     });
 
-    server.listen(PORT, '127.0.0.1', () => {
+    masterServer.listen(PORT, '127.0.0.1', () => {
         console.log(`\nMaster pid: ${process.pid} started on port ${PORT}`);
     })
 } else {
-    const worker_id = parseInt(cluster.worker.id);
-    const CHILD_PORT = parseInt(PORT) + worker_id;
-    const app = server.app();
+    // @ts-ignore
+    const worker_id: number = parseInt(cluster.worker.id);
+    const CHILD_PORT: number = PORT + worker_id;
+    const app: http.Server = ServerApp();
     app.listen(CHILD_PORT, '127.0.0.1', () => {
         console.log(`\nServer pid: ${process.pid} started on port ${CHILD_PORT}`);
     })
