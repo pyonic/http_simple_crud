@@ -1,19 +1,23 @@
-const crypto = require('crypto');
-const cluster = require('cluster');
+import * as crypto from 'crypto';
+import cluster from 'cluster';
 
-let setData = () => true;
+import { setData } from './db';
 
-if (cluster.isWorker) {
-    setData = require('./db').setData;
+interface User {
+    id?: string,
+    username: string,
+    age:  number,
+    hobbies: Array<string>
 }
 
 class UserDB {
+    _users_database: Array<User> = [];
 
-    constructor (users) {
+    constructor (users: Array<User>) {
         this._users_database = users;
     }
 
-    setUsers (users) {
+    setUsers (users: Array<User>) {
         this._users_database = users;
     }
 
@@ -21,14 +25,16 @@ class UserDB {
         return this._users_database;
     }
 
-    getOne (uid) {
+    getOne (uid: string) {
         return this._users_database.find(u => u.id === uid);
     }
 
-    updateOne (uid, data) {
+    updateOne (uid: string, data: User) {
         this._users_database = this._users_database.map(u => {
             if (u.id === uid) {
-                u = { ...data, ...u }
+                if (data.username) u.username = data.username;
+                if (data.age) u.age = data.age;
+                if (data.hobbies) u.hobbies = data.hobbies;
             }
             return u
         })
@@ -38,12 +44,14 @@ class UserDB {
         return this.getOne(uid);
     }
 
-    deleteOne (uid) {
+    deleteOne (uid: string) {
         this._users_database = this._users_database.filter(u => u.id !== uid).map(user => user);
+        console.log(cluster.isWorker);
+        
         cluster.isWorker && setData('users', this._users_database);
     }
 
-    insertUser (data) {
+    insertUser (data: User) {
         data.id = crypto.randomUUID();
         this._users_database.push(data);
         cluster.isWorker && setData('users', this._users_database);
@@ -54,4 +62,4 @@ class UserDB {
     }
 }
 
-module.exports = new UserDB([]);
+export { UserDB, User }

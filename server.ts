@@ -1,77 +1,85 @@
-const http = require('http');
-const crypto = require('crypto');
-const UserDB = require('./controllers/User');
+import * as http from 'http'
+import * as crypto from 'crypto'
+import { UserDB as UserDatabase } from './controllers/User';
 
-const { USER_UUID_MATCHER, GET_USER_MATCHER, USERS_ROUTE_MATCHER, HTTP_METHODS } = require('./constants');
-const { validateUser } = require('./utils/validators');
-const { serializer, parseBody } = require('./utils');
+const UserDB: UserDatabase = new UserDatabase([]);
 
-process.on('message', (data) => {
-    const messageData = JSON.parse(data.toString());
+import { USER_UUID_MATCHER, GET_USER_MATCHER, USERS_ROUTE_MATCHER, HTTP_METHODS } from './constants/index';
+import { validateUser } from './utils/validators';
+import { serializer, parseBody } from './utils/index';
+import { WorkerMessage } from './models/Workers';
+import { HttpResponse, ServerResponse } from './models/Server';
+import { IUser } from './models/User';
+
+process.on('message', (data: Buffer) => {
+    const messageData: WorkerMessage = JSON.parse(data.toString());
     process.stdout.write(`Updating users on worker ${process.pid}\n`)
     UserDB.setUsers(messageData.users);
 })
 
-const setJsonResponse = (res) => res.setHeader('Content-Type', 'application/json');
+const setJsonResponse = (res: any) => res.setHeader('Content-Type', 'application/json');
 
-const requestHandler = async (req, res) => {
-    const method = req.method;
-    let responseStatus;
-    let url = req.url;
-    let response;
+const requestHandler = async (req: any, res: any): Promise<HttpResponse> => {
+    const method: string = req.method;
+    let responseStatus: number;
+    let url: string = req.url;
+    let response: ServerResponse | any = serializer({});
 
     process.stdout.write(`[INFO] REQUEST ${method} --> '${url}'\n`);
 
     setJsonResponse(res);
     
     url = url.replace('/api', '');
+    
+    const userMatched: RegExpMatchArray | null =  url.match(GET_USER_MATCHER);
+    const usersRouteMatcher: RegExpMatchArray | null =  url.match(USERS_ROUTE_MATCHER);
 
-    if ((userData = url.match(GET_USER_MATCHER)) && method === HTTP_METHODS.get) {
-        const user = url.match(USER_UUID_MATCHER);
+    if (userMatched && method === HTTP_METHODS.get) {
+        const user: RegExpMatchArray | null = url.match(USER_UUID_MATCHER);
         
         if (!user) {
             responseStatus = 400;
             response = JSON.stringify({ error: 'Incorrect User ID'});
         } else {
-            const uuid = user[2];
-            const data = UserDB.getOne(uuid);
+            const uuid: string = user[2];
+            const data: IUser | undefined = UserDB.getOne(uuid);
             if (!data) responseStatus = 404; 
             else responseStatus = 200   
             response = JSON.stringify({ data: data || [] });
         }
 
-    } else if (url.match(USERS_ROUTE_MATCHER) && method == HTTP_METHODS.get) {
+    } else if (usersRouteMatcher && method == HTTP_METHODS.get) {
         
         responseStatus = 200;
         response = serializer({data: UserDB.getAll()});
     
-    } else if ((userData = url.match(GET_USER_MATCHER)) && method === HTTP_METHODS.put) {
-        const userId = url.match(USER_UUID_MATCHER);
+    } else if (userMatched && method === HTTP_METHODS.put) {
+        const userId: RegExpMatchArray | null = url.match(USER_UUID_MATCHER);
         
         if (!userId) {
             responseStatus = 400;
             response = JSON.stringify({ error: 'Incorrect User ID'});
         } else {
-            const uuid = userId[2];
-            const user = UserDB.getOne(uuid);
+            const uuid: string = userId[2];
+            const user: IUser | undefined = UserDB.getOne(uuid);
 
             if (!user) {
                 responseStatus = 404;
                 response = JSON.stringify({ error: 'User not found'});
             } else {
-                const body = await parseBody(req);
+                const body: any = await parseBody(req);
 
-                const updateData = body ? body.data : {};
+                const updateData: IUser = body ? body.data : {};
     
-                const user = UserDB.updateOne(uuid, updateData)
+                const user: IUser | undefined = UserDB.updateOne(uuid, updateData)
                 
                 responseStatus = 200;
                 response = serializer({data: user});
             }
         }
 
-    } else if (url.match(USERS_ROUTE_MATCHER) && method === HTTP_METHODS.post) {
-        const requestBody = await parseBody(req);
+    } else if (usersRouteMatcher && method === HTTP_METHODS.post) {
+        const requestBody: any = await parseBody(req);
 
         if (!requestBody.data) {
             responseStatus = 404;
@@ -79,9 +87,9 @@ const requestHandler = async (req, res) => {
         }
         
         if (validateUser(requestBody.data)) {
-            const userId = crypto.randomUUID();
+            const userId: string = crypto.randomUUID();
 
-            const newUser = {
+            const newUser: IUser = {
                 id: userId,
                 ...requestBody.data
             }
@@ -97,14 +105,16 @@ const requestHandler = async (req, res) => {
                 error: 'Please fill all required data {username: str, age: number, hobbies: array->string }'
             });
         }
-    } else if ((userData = url.match(GET_USER_MATCHER)) && method === HTTP_METHODS.delete) {
-        const userId = url.match(USER_UUID_MATCHER);
+    } else if (userMatched && method === HTTP_METHODS.delete) {
+        const userId: RegExpMatchArray | null = url.match(USER_UUID_MATCHER);
+        console.log(userId, );
         
         if (!userId) {
             responseStatus = 400;
             response = JSON.stringify({ error: 'Incorrect User ID'});
         } else {
-            const uuid = userId[2];
+            const uuid: string = userId[2];
+            console.log(UserDB.getOne(uuid));
 
             if (!UserDB.getOne(uuid)) {
                 responseStatus = 404;
@@ -122,23 +132,28 @@ const requestHandler = async (req, res) => {
     return { response, status: responseStatus }
 }
 
-const app = (users = []) => {
+const app = (users: Array<any> = []): http.Server => {
     if (users.length) UserDB.setUsers(users);
 
-    const server = http.createServer(async (req, res) => {
+    const server: http.Server = http.createServer(async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Content-Type', 'application/json');
+        
         console.log(`\nServer started ${ process.pid }`);
         try {
-            const data = await requestHandler(req, res);
-            console.log(data);
+            const data: HttpResponse = await requestHandler(req, res);
+
             if (!data.status) {
                 res.statusCode = 404;
                 res.end(JSON.stringify({ error: 'Not found' }));
             } else {
                 res.statusCode = data.status;
+                console.log(data.response);
+                
                 res.end(data.response);
             }
-        } catch (e) {
+        } catch (e: any) {
+            console.log(e);
             res.statusCode = 500;
             res.end(JSON.stringify({ error: e.message || 'Unexpected error' }));
         }
@@ -147,6 +162,4 @@ const app = (users = []) => {
     return server;
 }
 
-module.exports = {
-    app
-}
+export { app }

@@ -4,11 +4,11 @@ const nodeExternals = require('webpack-node-externals');
 module.exports = {
   target: "node",
   entry: {
-    app: ["./index.js"]
+    app: ["./dist/index.js"]
   },
   output: {
-    path: path.resolve(__dirname, "./build"),
-    filename: "bundle-index.js"
+    path: path.resolve(__dirname, "./bundle"),
+    filename: "index.js"
   },
   externals: [nodeExternals()],
   mode: 'production'
