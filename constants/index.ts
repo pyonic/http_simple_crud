@@ -3,11 +3,11 @@ const GET_USER_MATCHER = /^[/](users)[/]\w+/;
 const API_ROUTE_MATCHER = /[/](api)[/]/;
 const USERS_ROUTE_MATCHER = /[/](users)[/]?$/;
 
-// Errors
-
-module.exports = {
-    USER_UUID_MATCHER,
-    GET_USER_MATCHER,
-    API_ROUTE_MATCHER,
-    USERS_ROUTE_MATCHER
+const HTTP_METHODS = {
+    get: 'GET',
+    put: 'PUT',
+    post: 'POST',
+    delete: 'DELETE'
 }
+
+export { USER_UUID_MATCHER, GET_USER_MATCHER, API_ROUTE_MATCHER, USERS_ROUTE_MATCHER, HTTP_METHODS }
