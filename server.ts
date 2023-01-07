@@ -162,4 +162,4 @@ const app = (users: Array<any> = []): http.Server => {
     return server;
 }
 
-export { app }
+export { app, UserDB }
