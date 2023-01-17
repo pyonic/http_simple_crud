@@ -8,7 +8,7 @@ Approximate score: **222**
 
 > **Note**
 
-> POST/PUT User object accepted with data object wrapper -> Request body {"data": {...user_data} } [See CURL examples below](#curl-example-of-post&put-request)
+> POST/PUT User object accepted with data object wrapper -> Request body {"data": {...user_data} } [See CURL examples below](#curl-example-of-postput-request)
 
 > Self score calculations are in the borrom of Readme 
 
