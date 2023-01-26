@@ -1,4 +1,4 @@
-# Simple Crud API
+# Crud API with Node:HTTP module and LoadBalancer using Clusters 
 Task: https://github.com/AlreadyBored/nodejs-assignments/blob/main/assignments/crud-api/assignment.md
 ```
 Deadlines: start: 2023-01-02	end: 2023-01-17
